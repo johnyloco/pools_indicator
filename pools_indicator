@@ -1,0 +1,35 @@
+//@version=5
+indicator("Liquidity Square Standalone", overlay=true)
+
+// --- 1. THE BOOLEAN INPUT ---
+// This creates the "Inspected" checkbox in your settings
+showSquare = input.bool(true, "Show Liquidity Square", group="Main Settings")
+
+// --- 2. THE BOOLEAN EXPRESSION ---
+// This expression evaluates to 'true' only at 00:00:00 (Start of Day)
+isNewDay = ta.change(time("D")) != 0
+
+// --- 3. FETCH PREVIOUS DAY LIQUIDITY ---
+// We fetch High and Low from the daily chart [1] bar ago
+pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+pdLow  = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
+
+// --- 4. PRINTING IN MAIN VIEW ---
+var box liqSquare = na
+
+// Logic: If it is a New Day AND the Boolean checkbox is True...
+if isNewDay and showSquare
+    int startTime = time
+    int endTime   = time + 86400000 // Covers exactly 24 hours
+    
+    // Create the square on the main chart
+    liqSquare := box.new(left=startTime, top=pdHigh, right=endTime, bottom=pdLow, 
+                 xloc=xloc.bar_time, 
+                 border_color=color.new(color.gray, 50), 
+                 bgcolor=color.new(color.blue, 90),
+                 text_size=size.tiny,
+                 text_color=color.new(color.white, 50))
+
+// Cleanup: If the user unchecks the "showSquare" boolean, delete the box
+if not showSquare
+    box.delete(liqSquare)
