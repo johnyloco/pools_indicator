@@ -1,35 +1,51 @@
 //@version=5
-indicator("Liquidity Square Standalone", overlay=true)
+indicator("Liquidity Square with Fib Zones", overlay=true)
 
 // --- 1. THE BOOLEAN INPUT ---
-// This creates the "Inspected" checkbox in your settings
 showSquare = input.bool(true, "Show Liquidity Square", group="Main Settings")
+showFib    = input.bool(true, "Show Fib Zones", group="Main Settings")
 
 // --- 2. THE BOOLEAN EXPRESSION ---
-// This expression evaluates to 'true' only at 00:00:00 (Start of Day)
 isNewDay = ta.change(time("D")) != 0
 
 // --- 3. FETCH PREVIOUS DAY LIQUIDITY ---
-// We fetch High and Low from the daily chart [1] bar ago
 pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
 pdLow  = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
+diff   = pdHigh - pdLow
 
 // --- 4. PRINTING IN MAIN VIEW ---
 var box liqSquare = na
+var line fib236   = na
+var box zone50_61 = na
+var box zone78_1  = na
 
-// Logic: If it is a New Day AND the Boolean checkbox is True...
 if isNewDay and showSquare
     int startTime = time
-    int endTime   = time + 86400000 // Covers exactly 24 hours
+    int endTime   = time + 86400000 
     
-    // Create the square on the main chart
-    liqSquare := box.new(left=startTime, top=pdHigh, right=endTime, bottom=pdLow, 
-                 xloc=xloc.bar_time, 
-                 border_color=color.new(color.gray, 50), 
-                 bgcolor=color.new(color.blue, 90),
-                 text_size=size.tiny,
-                 text_color=color.new(color.white, 50))
+    // Calculate Levels
+    float level236 = pdLow + (diff * 0.236)
+    float level50  = pdLow + (diff * 0.50)
+    float level618 = pdLow + (diff * 0.618)
+    float level786 = pdLow + (diff * 0.786)
+    float level100 = pdHigh
 
-// Cleanup: If the user unchecks the "showSquare" boolean, delete the box
+    // Main Range Square
+    liqSquare := box.new(startTime, pdHigh, endTime, pdLow, xloc=xloc.bar_time, border_color=color.new(color.gray, 50), bgcolor=color.new(color.blue, 95))
+
+    if showFib
+        // Print Level 0.236 as a dashed line
+        fib236 := line.new(startTime, level236, endTime, level236, xloc=xloc.bar_time, color=color.new(color.gray, 60), style=line.style_dashed)
+
+        // Zone 1: Square between 0.5 and 0.618 (Equilibrium to Golden Pocket)
+        zone50_61 := box.new(startTime, level618, endTime, level50, xloc=xloc.bar_time, border_color=na, bgcolor=color.new(color.yellow, 85))
+
+        // Zone 2: Square between 0.786 and 1.0 (Deep Retracement/Premium)
+        zone78_1 := box.new(startTime, level100, endTime, level786, xloc=xloc.bar_time, border_color=na, bgcolor=color.new(color.red, 85))
+
+// --- 5. CLEANUP ---
 if not showSquare
     box.delete(liqSquare)
+    line.delete(fib236)
+    box.delete(zone50_61)
+    box.delete(zone78_1)
