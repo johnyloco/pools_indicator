@@ -1,51 +1,73 @@
 //@version=5
-indicator("Liquidity Square with Fib Zones", overlay=true)
+indicator("Liquidity Square Fixed - Fib & Volume", overlay=true)
 
-// --- 1. THE BOOLEAN INPUT ---
+// --- 1. SETTINGS ---
 showSquare = input.bool(true, "Show Liquidity Square", group="Main Settings")
 showFib    = input.bool(true, "Show Fib Zones", group="Main Settings")
 
-// --- 2. THE BOOLEAN EXPRESSION ---
+// --- 2. DATA & VOLUME CALCULATION ---
 isNewDay = ta.change(time("D")) != 0
 
-// --- 3. FETCH PREVIOUS DAY LIQUIDITY ---
+// Previous Day Data
 pdHigh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
 pdLow  = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
-diff   = pdHigh - pdLow
+pdVol  = request.security(syminfo.tickerid, "D", volume[1], lookahead=barmerge.lookahead_on)
 
-// --- 4. PRINTING IN MAIN VIEW ---
-var box liqSquare = na
-var line fib236   = na
-var box zone50_61 = na
-var box zone78_1  = na
+// Cumulative Volume for Today
+var float currentDayVol = 0.0
+if isNewDay
+    currentDayVol := volume
+else
+    currentDayVol += volume
 
+// Volume Percentage calculation
+volPercent = (currentDayVol / pdVol) * 100
+rangeDiff  = pdHigh - pdLow
+
+// --- 3. OBJECT HANDLES ---
+var box liqSquare  = na
+var line orange236 = na
+var box zone50_61  = na
+var box zone71_1   = na
+
+// --- 4. DRAWING LOGIC ---
 if isNewDay and showSquare
     int startTime = time
     int endTime   = time + 86400000 
     
-    // Calculate Levels
-    float level236 = pdLow + (diff * 0.236)
-    float level50  = pdLow + (diff * 0.50)
-    float level618 = pdLow + (diff * 0.618)
-    float level786 = pdLow + (diff * 0.786)
-    float level100 = pdHigh
+    // Level Calculations
+    float lev236 = pdLow  + (rangeDiff * 0.236)
+    float lev50  = pdLow  + (rangeDiff * 0.50)
+    float lev618 = pdLow  + (rangeDiff * 0.618)
+    float lev71  = pdLow  + (rangeDiff * 0.71)
+    float lev100 = pdHigh
 
-    // Main Range Square
-    liqSquare := box.new(startTime, pdHigh, endTime, pdLow, xloc=xloc.bar_time, border_color=color.new(color.gray, 50), bgcolor=color.new(color.blue, 95))
+    // Main Square
+    liqSquare := box.new(startTime, pdHigh, endTime, pdLow, xloc=xloc.bar_time, 
+                 border_color=color.new(color.gray, 50), 
+                 bgcolor=color.new(color.blue, 95),
+                 text_size=size.small, text_color=color.white, text_valign=text.align_bottom)
 
     if showFib
-        // Print Level 0.236 as a dashed line
-        fib236 := line.new(startTime, level236, endTime, level236, xloc=xloc.bar_time, color=color.new(color.gray, 60), style=line.style_dashed)
+        // Level 0.236: Orange Line
+        orange236 := line.new(startTime, lev236, endTime, lev236, xloc=xloc.bar_time, 
+                     color=color.orange, style=line.style_dashed, width=2)
 
-        // Zone 1: Square between 0.5 and 0.618 (Equilibrium to Golden Pocket)
-        zone50_61 := box.new(startTime, level618, endTime, level50, xloc=xloc.bar_time, border_color=na, bgcolor=color.new(color.yellow, 85))
+        // Zone 1: 0.5 to 0.618 (Yellow)
+        zone50_61 := box.new(startTime, lev618, endTime, lev50, xloc=xloc.bar_time, 
+                     border_color=na, bgcolor=color.new(color.yellow, 85))
 
-        // Zone 2: Square between 0.786 and 1.0 (Deep Retracement/Premium)
-        zone78_1 := box.new(startTime, level100, endTime, level786, xloc=xloc.bar_time, border_color=na, bgcolor=color.new(color.red, 85))
+        // Zone 2: 0.71 to 1.0 (Red)
+        zone71_1  := box.new(startTime, lev100, endTime, lev71, xloc=xloc.bar_time, 
+                     border_color=na, bgcolor=color.new(color.red, 85))
 
-// --- 5. CLEANUP ---
+// --- 5. REAL-TIME VOLUME UPDATE ---
+if not na(liqSquare) and showSquare
+    box.set_text(liqSquare, "Vol: " + str.tostring(volPercent, "#.##") + "%")
+
+// --- 6. CLEANUP ON TOGGLE ---
 if not showSquare
     box.delete(liqSquare)
-    line.delete(fib236)
+    line.delete(orange236)
     box.delete(zone50_61)
-    box.delete(zone78_1)
+    box.delete(zone71_1)
