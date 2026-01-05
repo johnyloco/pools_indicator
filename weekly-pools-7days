@@ -1,0 +1,76 @@
+//@version=5
+indicator("Liquidity Square - Price Stats", overlay=true, max_boxes_count=500, max_lines_count=500)
+
+// --- 1. SETTINGS ---
+showSquare = input.bool(true, "Show Liquidity Square", group="Main Settings")
+showFib    = input.bool(true, "Show Fib Zones", group="Main Settings")
+showStats  = input.bool(true, "Show Prev Day Stats", group="Main Settings")
+
+// --- 2. DATA CALCULATION ---
+isNewWeek = ta.change(time("W")) != 0
+
+// Previous week Data
+pdHigh  = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.lookahead_on)
+pdLow   = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_on)
+pdOpen  = request.security(syminfo.tickerid, "W", open[1], lookahead=barmerge.lookahead_on)
+pdClose = request.security(syminfo.tickerid, "W", close[1], lookahead=barmerge.lookahead_on)
+
+// Percentage Calculations
+// 1. Move from Open to Close (Trend)
+pdBodyMove = ((pdClose - pdOpen) / pdOpen) * 100
+// 2. Move from Low to High (Total Volatility Range)
+pdTotalRange = ((pdHigh - pdLow) / pdLow) * 100
+
+rangeDiff  = pdHigh - pdLow
+
+// --- 3. OBJECT HANDLES ---
+var box liqSquare  = na
+var line orange236 = na
+var box zone50_61  = na
+var box zone78_1   = na
+
+// --- 4. DRAWING LOGIC ---
+if isNewWeek and showSquare
+    int startTime = time
+    int endTime   = time + 86400000 * 7
+    
+    // Fibonacci Level Calculations
+    float lev236 = pdLow  + (rangeDiff * 0.236)
+    float lev50  = pdLow  + (rangeDiff * 0.50)
+    float lev618 = pdLow  + (rangeDiff * 0.618)
+    float lev78  = pdLow  + (rangeDiff * 0.78)
+    float lev100 = pdHigh
+
+    // Main Liquidity Square
+    liqSquare := box.new(startTime, pdHigh, endTime, pdLow, xloc=xloc.bar_time, 
+                 border_color=color.new(#867878, 50), 
+                 bgcolor=color.new(#428fce, 95),
+                 text_size=size.normal, text_color=color.white, text_valign=text.align_bottom)
+
+    if showFib
+        // Level 0.236: Orange Line
+        orange236 := line.new(startTime, lev236, endTime, lev236, xloc=xloc.bar_time, 
+                     color=color.orange, style=line.style_solid, width=2)
+
+        // Zone 1: 0.5 to 0.618 (Yellow)
+        zone50_61 := box.new(startTime, lev618, endTime, lev50, xloc=xloc.bar_time, 
+                     border_color=na, bgcolor=color.new(#cea727, 40))
+
+        // Zone 2: 0.78 to 1.0 (Red)
+        zone78_1  := box.new(startTime, lev100, endTime, lev78, xloc=xloc.bar_time, 
+                     border_color=na, bgcolor=color.new(#bd1414, 27))
+
+// --- 5. TEXT UPDATE ---
+if not na(liqSquare) and showSquare
+    string txt = ""
+    if showStats
+        txt := "(O/C): " + str.tostring(pdBodyMove, "#.##") + "% - "
+        txt += "(L/H): " + str.tostring(pdTotalRange, "#.##") + "% "
+    box.set_text(liqSquare, txt)
+
+// --- 6. CLEANUP ON TOGGLE ---
+if not showSquare
+    box.delete(liqSquare)
+    line.delete(orange236)
+    box.delete(zone50_61)
+    box.delete(zone78_1)
