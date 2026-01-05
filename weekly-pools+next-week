@@ -1,0 +1,95 @@
+//@version=5
+indicator("Liquidity Square - Current & Projected", overlay=true, max_boxes_count=500, max_lines_count=500)
+
+// --- 1. SETTINGS ---
+showSquare = input.bool(true, "Show Boxes", group="Main Settings")
+showFib    = input.bool(true, "Show Fib Zones", group="Main Settings")
+showStats  = input.bool(true, "Show Stats", group="Main Settings")
+
+// --- 2. DATA CALCULATION ---
+isNewWeek = ta.change(time("W")) != 0
+
+// Previous week Data (for Historical Boxes)
+pdHigh  = request.security(syminfo.tickerid, "W", high[1], lookahead=barmerge.lookahead_on)
+pdLow   = request.security(syminfo.tickerid, "W", low[1], lookahead=barmerge.lookahead_on)
+pdOpen  = request.security(syminfo.tickerid, "W", open[1], lookahead=barmerge.lookahead_on)
+pdClose = request.security(syminfo.tickerid, "W", close[1], lookahead=barmerge.lookahead_on)
+rangeDiffPrev = pdHigh - pdLow
+
+// Current week Data (for Real-time Projection)
+currHigh  = request.security(syminfo.tickerid, "W", high, lookahead=barmerge.lookahead_on)
+currLow   = request.security(syminfo.tickerid, "W", low, lookahead=barmerge.lookahead_on)
+rangeDiffCurr = currHigh - currLow
+
+
+// --- 3. PERSISTENT HANDLES FOR PROJECTION ---
+var box nextBox = na
+var line nextLine = na
+var box nextZ1 = na
+var box nextZ2 = na
+
+// --- 4. DRAWING LOGIC: HISTORICAL (CURRENT WEEK) ---
+if isNewWeek and showSquare
+    int startTime = time
+    int endTime   = time_close("W") 
+    
+    // Levels based on PREVIOUS week
+    float l236 = pdLow + (rangeDiffPrev * 0.236)
+    float l50  = pdLow + (rangeDiffPrev * 0.50)
+    float l618 = pdLow + (rangeDiffPrev * 0.618)
+    float l78  = pdLow + (rangeDiffPrev * 0.78)
+
+    // Draw Static Box for the week that just started
+    box.new(startTime, pdHigh, endTime, pdLow, xloc=xloc.bar_time, border_color=color.new(color.gray, 50), bgcolor=color.new(color.blue, 95))
+    
+    if showFib
+        line.new(startTime, l236, endTime, l236, xloc=xloc.bar_time, color=color.orange, width=2)
+        box.new(startTime, l618, endTime, l50, xloc=xloc.bar_time, border_color=na, bgcolor=color.new(#f5f76c, 80))
+        box.new(startTime, pdHigh, endTime, l78, xloc=xloc.bar_time, border_color=na, bgcolor=color.new(color.red, 80))
+
+// --- 5. DRAWING LOGIC: PROJECTION (NEXT WEEK) ---
+if showSquare and barstate.islast
+    int nextStart = time_close("W")
+    int nextEnd   = nextStart + 604800000
+    
+    float nl236 = currLow + (rangeDiffCurr * 0.236)
+    float nl50  = currLow + (rangeDiffCurr * 0.50)
+    float nl618 = currLow + (rangeDiffCurr * 0.618)
+    float nl78  = currLow + (rangeDiffCurr * 0.78)
+
+    // Update or Create the Projected Box
+// --- 5. DRAWING LOGIC: PROJECTION (NEXT WEEK) ---
+if showSquare and barstate.islast
+    int nextStart = time_close("W")
+    int nextEnd   = nextStart + 604800000
+    
+    float nl236 = currLow + (rangeDiffCurr * 0.236)
+    float nl50  = currLow + (rangeDiffCurr * 0.50)
+    float nl618 = currLow + (rangeDiffCurr * 0.618)
+    float nl78  = currLow + (rangeDiffCurr * 0.78)
+
+    // Update or Create the Projected Box with TRANSPARENT border
+    if na(nextBox)
+        // Set border_color to na to make it invisible
+        nextBox := box.new(nextStart, currHigh, nextEnd, currLow, xloc=xloc.bar_time, 
+                     border_color=na, 
+                     bgcolor=color.new(color.blue, 100))
+    else
+        box.set_lefttop(nextBox, nextStart, currHigh)
+        box.set_rightbottom(nextBox, nextEnd, currLow)
+
+    if showFib
+        if na(nextLine)
+            nextLine := line.new(nextStart, nl236, nextEnd, nl236, xloc=xloc.bar_time, color=color.orange, width=2)
+            // Zones with your requested opacity (80 transparency = 0.2 opacity)
+            nextZ1   := box.new(nextStart, nl618, nextEnd, nl50, xloc=xloc.bar_time, 
+                          border_color=na, bgcolor=color.new(#f5f76c, 80))
+            nextZ2   := box.new(nextStart, currHigh, nextEnd, nl78, xloc=xloc.bar_time, 
+                          border_color=na, bgcolor=color.new(color.red, 80))
+        else
+            line.set_xy1(nextLine, nextStart, nl236)
+            line.set_xy2(nextLine, nextEnd, nl236)
+            box.set_lefttop(nextZ1, nextStart, nl618)
+            box.set_rightbottom(nextZ1, nextEnd, nl50)
+            box.set_lefttop(nextZ2, nextStart, currHigh)
+            box.set_rightbottom(nextZ2, nextEnd, nl78)
