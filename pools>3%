@@ -1,5 +1,5 @@
 //@version=5
-indicator("Liquidity Square - Price Stats", overlay=true, max_boxes_count=500, max_lines_count=500)
+indicator("Liquidity Square - Adaptive Visuals", overlay=true, max_boxes_count=500, max_lines_count=500)
 
 // --- 1. SETTINGS ---
 showSquare = input.bool(true, "Show Liquidity Square", group="Main Settings")
@@ -16,23 +16,24 @@ pdOpen  = request.security(syminfo.tickerid, "D", open[1], lookahead=barmerge.lo
 pdClose = request.security(syminfo.tickerid, "D", close[1], lookahead=barmerge.lookahead_on)
 
 // Percentage Calculations
-// 1. Move from Open to Close (Trend)
 pdBodyMove = ((pdClose - pdOpen) / pdOpen) * 100
-// 2. Move from Low to High (Total Volatility Range)
 pdTotalRange = ((pdHigh - pdLow) / pdLow) * 100
 
 rangeDiff  = pdHigh - pdLow
 
 // --- 3. OBJECT HANDLES ---
 var box liqSquare  = na
-var line orange236 = na
+var box box236     = na 
 var box zone50_61  = na
 var box zone78_1   = na
 
 // --- 4. DRAWING LOGIC ---
-if isNewDay and showSquare and pdTotalRange >= 3.0
+if isNewDay and showSquare 
     int startTime = time
     int endTime   = time + 86400000 
+    
+    // Logic: Is this day highly liquid (> 3%)?
+    bool isHighVol = pdTotalRange >= 3.0
     
     // Fibonacci Level Calculations
     float lev236 = pdLow  + (rangeDiff * 0.236)
@@ -41,36 +42,49 @@ if isNewDay and showSquare and pdTotalRange >= 3.0
     float lev78  = pdLow  + (rangeDiff * 0.78)
     float lev100 = pdHigh
 
-    // Prepare text first so it can be printed immediately inside the box
+    // Prepare text ONLY for high volatility days
     string txt = ""
-    if showStats
+    if showStats and isHighVol
         txt := "(O/C): " + str.tostring(pdBodyMove, "#.##") + "% - "
         txt += "(L/H): " + str.tostring(pdTotalRange, "#.##") + "% "
 
-// Main Liquidity Square
+    // --- MAIN SQUARE COLORS ---
+    // If < 3%, background is invisible (na), border is a very thin light grey
+    color bgCol  = isHighVol ? color.new(#428fce, 95) : na
+    color borCol = isHighVol ? color.new(#867878, 50) : color.new(color.gray, 80)
+
     liqSquare := box.new(startTime, pdHigh, endTime, pdLow, xloc=xloc.bar_time, 
-                 border_color=color.new(#867878, 50), 
-                 bgcolor=color.new(#428fce, 95),
-                 text=txt, // $\star$ Added text here
+                 border_color=borCol, 
+                 bgcolor=bgCol,
+                 text=txt, 
                  text_size=size.normal, text_color=color.white, text_valign=text.align_bottom)
 
     if showFib
-        // Level 0.236: Orange Line
-        orange236 := line.new(startTime, lev236, endTime, lev236, xloc=xloc.bar_time, 
-                     color=color.orange, style=line.style_solid, width=2)
+        // --- FIB ZONE COLORS ---
+        // If < 3%, zones have NO background, only thin borders to show the "lines"
+        color f1Bg  = isHighVol ? color.new(#cea727, 40) : na
+        color f1Bor = isHighVol ? na : color.new(color.gray, 80)
+        
+        color f2Bg  = isHighVol ? color.new(#bd1414, 27) : na
+        color f2Bor = isHighVol ? na : color.new(color.gray, 80)
 
-        // Zone 1: 0.5 to 0.618 (Yellow)
+        // Level 0.236: Always visible as a thin line (box with 0 height)
+        box236 := box.new(startTime, lev236, endTime, lev236, xloc=xloc.bar_time, 
+                  border_color=color.new(color.orange, isHighVol ? 0 : 70), bgcolor=na)
+
+        // Zone 1: 0.5 to 0.618
         zone50_61 := box.new(startTime, lev618, endTime, lev50, xloc=xloc.bar_time, 
-                     border_color=na, bgcolor=color.new(#cea727, 40))
+                     border_color=f1Bor, bgcolor=f1Bg)
 
-        // Zone 2: 0.78 to 1.0 (Red)
+        // Zone 2: 0.78 to 1.0
         zone78_1  := box.new(startTime, lev100, endTime, lev78, xloc=xloc.bar_time, 
-                     border_color=na, bgcolor=color.new(#bd1414, 27))
+                     border_color=f2Bor, bgcolor=f2Bg)
 
 // --- 5. TEXT UPDATE ---
 if not na(liqSquare) and showSquare
     string txt = ""
-    if showStats
+    // Text update only occurs for > 3% range
+    if showStats and pdTotalRange >= 3.0
         txt := "(O/C): " + str.tostring(pdBodyMove, "#.##") + "% - "
         txt += "(L/H): " + str.tostring(pdTotalRange, "#.##") + "% "
     box.set_text(liqSquare, txt)
@@ -78,6 +92,6 @@ if not na(liqSquare) and showSquare
 // --- 6. CLEANUP ON TOGGLE ---
 if not showSquare
     box.delete(liqSquare)
-    line.delete(orange236)
+    box.delete(box236)
     box.delete(zone50_61)
     box.delete(zone78_1)
